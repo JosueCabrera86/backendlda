@@ -1,0 +1,18 @@
+# Ignorar entorno virtual
+env/
+venv/
+ENV/
+
+# Ignorar archivos de entorno con claves (típico .env)
+.env
+models/env
+models/.env
+
+
+
+# Ignorar archivos pycache de python
+__pycache__/
+*.pyc
+
+# Ignorar archivos de configuración local de VSCode (opcional)
+.vscode/
