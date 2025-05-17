@@ -170,8 +170,3 @@ def delete_user(current_user, email):
     db.session.delete(user)
     db.session.commit()
     return jsonify({'message': 'Usuario eliminado'}), 200
-
-
-# Crear la base de datos si no existe
-with app.app_context():
-    db.create_all()
