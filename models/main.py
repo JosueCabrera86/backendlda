@@ -2,12 +2,15 @@ from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_migrate import Migrate
+from models import db, User, Post, Section
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import os
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
+from flask import Blueprint
+from blog.routes import blog_bp
 
 
 load_dotenv()
@@ -16,23 +19,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
-db = SQLAlchemy(app)
+db.init_app(app)
 migrate = Migrate(app, db)
 CORS(app)
 
-
-class User(db.Model):
-    __tablename__ = 'users'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), unique=True, nullable=False)
-    categoria = db.Column(db.String(50), nullable=True)
-    password = db.Column(db.String(300), nullable=True)
-    rol = db.Column(db.String(20), default='usuario')
-
-    def __repr__(self):
-        return f"<User {self.name}>"
+app.register_blueprint(blog_bp, url_prefix='/api')
 
 
 @app.route('/login', methods=['POST'])
