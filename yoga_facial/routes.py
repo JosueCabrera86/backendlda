@@ -34,7 +34,7 @@ MATERIAL_YOGAFACIAL = {
 @yoga_bp.route("/material", methods=["GET"])
 @token_required
 def get_yoga_material(current_user):
-    if current_user.disciplina != "Yoga facial":
+    if current_user.disciplina != "yoga_facial":
         return jsonify({"error": "No tienes acceso a Yoga Facial"}), 403
 
     nivel = current_user.categoria or 0
@@ -42,4 +42,4 @@ def get_yoga_material(current_user):
     for i in range(0, nivel+1):
         material.extend(MATERIAL_YOGAFACIAL.get(i, []))
 
-    return jsonify({"disciplina": "Yoga facial", "nivel": nivel, "material": material})
+    return jsonify({"disciplina": "yoga_facial", "nivel": nivel, "material": material})

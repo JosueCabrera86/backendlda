@@ -155,6 +155,34 @@ def update_user(current_user, email):
     return jsonify({'message': 'Usuario actualizado'}), 200
 
 
+@app.route("/users/update-multiple", methods=['PUT'])
+@token_required(required_rol='admin')
+def update_multiple_users(current_user):
+    data = request.get_json()
+    usuarios = data.get("usuarios", [])
+
+    updated = []
+    errors = []
+
+    for u in usuarios:
+        user = User.query.filter_by(email=u.get("email")).first()
+        if user:
+            user.categoria = u.get("categoria", user.categoria)
+            # Si quieres también permitir cambiar disciplina:
+            if "disciplina" in u:
+                user.disciplina = u["disciplina"]
+            updated.append(user.email)
+        else:
+            errors.append(u.get("email"))
+
+    db.session.commit()
+
+    return jsonify({
+        "actualizados": updated,
+        "no_encontrados": errors
+    }), 200
+
+
 @app.route("/users/<email>", methods=['DELETE'])
 # Solo los administradores pueden borrar usuarios
 @token_required(required_rol='admin')
