@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import Blueprint
 from blog.routes import blog_bp
+from yoga_facial.routes import yoga_bp
+from casino.routes import casino_bp
 
 
 load_dotenv()
@@ -24,6 +26,8 @@ migrate = Migrate(app, db)
 CORS(app)
 
 app.register_blueprint(blog_bp, url_prefix='/api')
+app.register_blueprint(yoga_bp, url_prefix="/api/yoga-facial")
+app.register_blueprint(casino_bp, url_prefix="/api/casino")
 
 
 @app.route('/login', methods=['POST'])
@@ -112,6 +116,7 @@ def create_user(current_user):
     name = data.get('name')
     email = data.get('email')
     categoria = data.get('categoria')
+    disciplina = data.get('disciplina')
     password = data.get('password')
     rol = data.get('rol', 'usuario')
 
