@@ -43,13 +43,23 @@ def login():
     user = User.query.filter_by(email=email).first()
 
     if user and check_password_hash(user.password, password):
-        token = generate_token(user.id, user.rol)
+        # Generar token con info adicional (rol, disciplina, categoria)
+        expiration = datetime.utcnow() + timedelta(hours=1)
+        token = jwt.encode({
+            'user_id': user.id,
+            'exp': expiration,
+            'rol': user.rol,
+            'disciplina': user.disciplina,
+            'categoria': user.categoria
+        }, app.config['SECRET_KEY'], algorithm='HS256')
+
         return jsonify({
             "message": "Login exitoso",
             "token": token
         }), 200
     else:
         return jsonify({"error": "Email o contraseña no válida"}), 401
+
 
 # Función para generar el token JWT
 

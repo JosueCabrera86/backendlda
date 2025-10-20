@@ -4,9 +4,7 @@ from utils.auth import token_required
 
 yoga_bp = Blueprint("yoga_bp", __name__)
 
-
 MATERIAL_YOGAFACIAL = {
-
     0: ["Clase introductoria"],
     1: ["Masaje periférico"],
     2: ["Masaje de reseteo facial"],
@@ -34,12 +32,20 @@ MATERIAL_YOGAFACIAL = {
 @yoga_bp.route("/material", methods=["GET"])
 @token_required
 def get_yoga_material(current_user):
+    # Solo usuarios de yoga_facial pueden acceder
     if current_user.disciplina != "yoga_facial":
         return jsonify({"error": "No tienes acceso a Yoga Facial"}), 403
 
-    nivel = current_user.categoria or 0
+    # Admin ve todo
+    nivel = max(MATERIAL_YOGAFACIAL.keys()
+                ) if current_user.rol == "admin" else current_user.categoria or 0
+
     material = []
-    for i in range(0, nivel+1):
+    for i in range(nivel + 1):
         material.extend(MATERIAL_YOGAFACIAL.get(i, []))
 
-    return jsonify({"disciplina": "yoga_facial", "nivel": nivel, "material": material})
+    return jsonify({
+        "disciplina": "yoga_facial",
+        "nivel": nivel,
+        "material": material
+    })
