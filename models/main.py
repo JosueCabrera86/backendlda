@@ -187,9 +187,9 @@ def update_multiple_users(current_user):
         user = User.query.filter_by(email=u.get("email")).first()
         if user:
             user.categoria = u.get("categoria", user.categoria)
-            # Si quieres también permitir cambiar disciplina:
             if "disciplina" in u:
-                user.disciplina = u["disciplina"]
+                # Normalizar disciplina
+                user.disciplina = u["disciplina"].strip().lower()
             updated.append(user.email)
         else:
             errors.append(u.get("email"))
