@@ -9,11 +9,6 @@ import os
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Blueprint
-from blog.routes import blog_bp
-from yoga_facial.routes import yoga_bp
-from casino.routes import casino_bp
-
 
 load_dotenv()
 app = Flask(__name__)
@@ -25,53 +20,7 @@ db.init_app(app)
 migrate = Migrate(app, db)
 CORS(app)
 
-app.register_blueprint(blog_bp, url_prefix='/api')
-app.register_blueprint(yoga_bp, url_prefix="/api/yoga-facial")
-app.register_blueprint(casino_bp, url_prefix="/api/casino")
-
-
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-
-    # Validación de campos vacíos
-    if not email or not password:
-        return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
-
-    user = User.query.filter_by(email=email).first()
-
-    if user and check_password_hash(user.password, password):
-        # Generar token con info adicional (rol, disciplina, categoria)
-        expiration = datetime.utcnow() + timedelta(hours=1)
-        token = jwt.encode({
-            'user_id': user.id,
-            'exp': expiration,
-            'rol': user.rol,
-            'disciplina': user.disciplina,
-            'categoria': user.categoria
-        }, app.config['SECRET_KEY'], algorithm='HS256')
-
-        return jsonify({
-            "message": "Login exitoso",
-            "token": token
-        }), 200
-    else:
-        return jsonify({"error": "Email o contraseña no válida"}), 401
-
-
-# Función para generar el token JWT
-
-
-def generate_token(user_id, rol):
-    expiration = datetime.utcnow() + timedelta(hours=1)  # El token expirará en 1 hora
-    token = jwt.encode({
-        'user_id': user_id,
-        'exp': expiration,
-        'rol': rol
-    }, app.config['SECRET_KEY'], algorithm='HS256')  # Usa la clave secreta
-    return token
+# ------------------ TOKEN & AUTH ------------------ #
 
 
 def token_required(required_rol=None):
@@ -81,7 +30,6 @@ def token_required(required_rol=None):
             auth_header = request.headers.get('Authorization', '')
             if not auth_header.startswith('Bearer '):
                 return jsonify({'message': 'Formato de token inválido'}), 403
-
             token = auth_header.split(' ')[1]
 
             try:
@@ -98,32 +46,60 @@ def token_required(required_rol=None):
                 if required_rol and current_user.rol != required_rol:
                     return jsonify({'message': 'Permiso denegado'}), 403
 
-                print(
-                    f"[token_required] Usuario {current_user.email} autenticado correctamente")
-
             except jwt.ExpiredSignatureError:
                 return jsonify({'message': 'El token ha expirado'}), 401
             except jwt.InvalidTokenError:
                 return jsonify({'message': 'Token inválido'}), 401
             except Exception as e:
-                print(f"[token_required] Error con token: {e}")
+                print("Error en token_required:", e)
                 return jsonify({'message': 'Error interno de autenticación'}), 500
 
             return f(current_user, *args, **kwargs)
-
         return decorated_function
     return decorator
 
+# ------------------ LOGIN ------------------ #
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({'error': 'Correo y contraseña son obligatorios'}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if user and check_password_hash(user.password, password):
+        expiration = datetime.utcnow() + timedelta(hours=1)
+        token = jwt.encode({
+            'user_id': user.id,
+            'exp': expiration,
+            'rol': user.rol,
+            'disciplina': user.disciplina,
+            'categoria': user.categoria
+        }, app.config['SECRET_KEY'], algorithm='HS256')
+        return jsonify({"message": "Login exitoso", "token": token}), 200
+    else:
+        return jsonify({"error": "Email o contraseña no válida"}), 401
+
+# ------------------ USUARIOS ------------------ #
+
 
 @app.route("/users", methods=['GET'])
-@token_required()  # Solo requiere un token válido
-def get_users(current_user):  # Recibimos el usuario actual decodificado
+@token_required()
+def get_users(current_user):
     users = User.query.all()
     return jsonify({
         "users": [
-            {"id": user.id, "name": user.name,
-             "email": user.email, "categoria": user.categoria}
-            for user in users
+            {
+                "id": u.id,
+                "name": u.name,
+                "email": u.email,
+                "categoria": u.categoria,
+                "disciplina": u.disciplina,
+                "rol": u.rol
+            } for u in users
         ]
     })
 
@@ -135,31 +111,43 @@ def create_user(current_user):
     name = data.get('name')
     email = data.get('email')
     categoria = data.get('categoria')
-    disciplina = data.get('disciplina')
+    disciplina = data.get('disciplina', '').lower().replace(" ", "_")
     password = data.get('password')
-    rol = data.get('rol', 'usuario')
+    rol = data.get('rol', 'usuario').lower()
 
-    if not name or not email or not password:
+    if not all([name, email, password, categoria, disciplina, rol]):
         return jsonify({'error': 'Faltan datos obligatorios'}), 400
 
     if len(password) < 6:
         return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
 
-    existing_user = User.query.filter_by(email=email).first()
-    if existing_user:
+    if User.query.filter_by(email=email).first():
         return jsonify({'error': 'El correo ya está registrado'}), 400
 
-    hashed_password = generate_password_hash(password)
-    new_user = User(name=name, email=email, categoria=categoria,
-                    password=hashed_password, rol=rol)
+    new_user = User(
+        name=name,
+        email=email,
+        categoria=categoria,
+        disciplina=disciplina,
+        rol=rol,
+        password=generate_password_hash(password)
+    )
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({'message': 'Usuario creado con éxito'}), 201
+    return jsonify({
+        "message": "Usuario creado con éxito",
+        "user": {
+            "name": new_user.name,
+            "email": new_user.email,
+            "categoria": new_user.categoria,
+            "disciplina": new_user.disciplina,
+            "rol": new_user.rol
+        }
+    }), 201
 
 
 @app.route("/users/<email>", methods=['PUT'])
-# Solo los administradores pueden modificar usuarios
 @token_required(required_rol='admin')
 def update_user(current_user, email):
     user = User.query.filter_by(email=email).first()
@@ -167,11 +155,38 @@ def update_user(current_user, email):
         return jsonify({'error': 'Usuario no encontrado'}), 404
 
     data = request.get_json()
-    user.name = data.get('name', user.name)
-    user.categoria = data.get('categoria', user.categoria)
+    if "name" in data:
+        user.name = data["name"]
+    if "categoria" in data:
+        user.categoria = data["categoria"]
+    if "disciplina" in data:
+        user.disciplina = data["disciplina"].lower().replace(" ", "_")
+    if "rol" in data:
+        user.rol = data["rol"].lower()
 
     db.session.commit()
-    return jsonify({'message': 'Usuario actualizado'}), 200
+    return jsonify({
+        "message": "Usuario actualizado",
+        "user": {
+            "name": user.name,
+            "email": user.email,
+            "categoria": user.categoria,
+            "disciplina": user.disciplina,
+            "rol": user.rol
+        }
+    }), 200
+
+
+@app.route("/users/<email>", methods=['DELETE'])
+@token_required(required_rol='admin')
+def delete_user(current_user, email):
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({'error': 'Usuario no encontrado'}), 404
+
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'message': 'Usuario eliminado'}), 200
 
 
 @app.route("/users/update-multiple", methods=['PUT'])
@@ -186,10 +201,12 @@ def update_multiple_users(current_user):
     for u in usuarios:
         user = User.query.filter_by(email=u.get("email")).first()
         if user:
-            user.categoria = u.get("categoria", user.categoria)
+            if "categoria" in u:
+                user.categoria = u["categoria"]
             if "disciplina" in u:
-                # Normalizar disciplina
-                user.disciplina = u["disciplina"].strip().lower()
+                user.disciplina = u["disciplina"].lower().replace(" ", "_")
+            if "rol" in u:
+                user.rol = u["rol"].lower()
             updated.append(user.email)
         else:
             errors.append(u.get("email"))
@@ -200,16 +217,3 @@ def update_multiple_users(current_user):
         "actualizados": updated,
         "no_encontrados": errors
     }), 200
-
-
-@app.route("/users/<email>", methods=['DELETE'])
-# Solo los administradores pueden borrar usuarios
-@token_required(required_rol='admin')
-def delete_user(current_user, email):
-    user = User.query.filter_by(email=email).first()
-    if not user:
-        return jsonify({'error': 'Usuario no encontrado'}), 404
-
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({'message': 'Usuario eliminado'}), 200
