@@ -74,7 +74,6 @@ def generate_token(user_id, rol):
     return token
 
 
-# Función para proteger rutas con JWT y verificar el rol (opcional)
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -108,9 +107,11 @@ def token_required(required_rol=None):
             except jwt.InvalidTokenError:
                 return jsonify({'message': 'Token inválido'}), 401
             except Exception as e:
+                # Cualquier otro error inesperado
                 print("Error en token_required:", e)
                 return jsonify({'message': 'Error interno de autenticación'}), 500
 
+            # Llamar a la función protegida pasando current_user
             return f(current_user, *args, **kwargs)
 
         return decorated_function
