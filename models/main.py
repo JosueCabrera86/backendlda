@@ -85,12 +85,9 @@ def token_required(required_rol=None):
             token = auth_header.split(' ')[1]
 
             try:
-                # Decodificar token
                 data = jwt.decode(
                     token, app.config['SECRET_KEY'], algorithms=["HS256"])
-
-                # Buscar 'id' o 'user_id' para obtener usuario
-                user_id = data.get('id') or data.get('user_id')
+                user_id = data.get('user_id') or data.get('id')
                 if not user_id:
                     return jsonify({'message': 'Token inválido: no contiene ID de usuario'}), 401
 
@@ -98,20 +95,20 @@ def token_required(required_rol=None):
                 if not current_user:
                     return jsonify({'message': 'Usuario no encontrado'}), 401
 
-                # Verificar rol si se requiere
                 if required_rol and current_user.rol != required_rol:
                     return jsonify({'message': 'Permiso denegado'}), 403
+
+                print(
+                    f"[token_required] Usuario {current_user.email} autenticado correctamente")
 
             except jwt.ExpiredSignatureError:
                 return jsonify({'message': 'El token ha expirado'}), 401
             except jwt.InvalidTokenError:
                 return jsonify({'message': 'Token inválido'}), 401
             except Exception as e:
-                # Cualquier otro error inesperado
-                print("Error en token_required:", e)
+                print(f"[token_required] Error con token: {e}")
                 return jsonify({'message': 'Error interno de autenticación'}), 500
 
-            # Llamar a la función protegida pasando current_user
             return f(current_user, *args, **kwargs)
 
         return decorated_function
