@@ -9,6 +9,7 @@ import os
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
+from yoga_facial.routes import yoga_bp
 
 load_dotenv()
 app = Flask(__name__)
@@ -20,6 +21,7 @@ db.init_app(app)
 migrate = Migrate(app, db)
 CORS(app)
 
+app.register_blueprint(yoga_bp, url_prefix="/api/yoga-facial")
 # ------------------ TOKEN & AUTH ------------------ #
 
 
