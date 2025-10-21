@@ -86,13 +86,20 @@ def token_required(required_rol=None):
             token = auth_header.split(' ')[1]
 
             try:
+                # Decodificar token
                 data = jwt.decode(
                     token, app.config['SECRET_KEY'], algorithms=["HS256"])
-                current_user = User.query.get(data['user_id'])
 
+                # Buscar 'id' o 'user_id' para obtener usuario
+                user_id = data.get('id') or data.get('user_id')
+                if not user_id:
+                    return jsonify({'message': 'Token inválido: no contiene ID de usuario'}), 401
+
+                current_user = User.query.get(user_id)
                 if not current_user:
                     return jsonify({'message': 'Usuario no encontrado'}), 401
 
+                # Verificar rol si se requiere
                 if required_rol and current_user.rol != required_rol:
                     return jsonify({'message': 'Permiso denegado'}), 403
 
@@ -100,8 +107,12 @@ def token_required(required_rol=None):
                 return jsonify({'message': 'El token ha expirado'}), 401
             except jwt.InvalidTokenError:
                 return jsonify({'message': 'Token inválido'}), 401
+            except Exception as e:
+                print("Error en token_required:", e)
+                return jsonify({'message': 'Error interno de autenticación'}), 500
 
             return f(current_user, *args, **kwargs)
+
         return decorated_function
     return decorator
 
