@@ -3,7 +3,6 @@ from utils.auth import token_required
 
 yoga_bp = Blueprint("yoga_bp", __name__)
 
-# Material de yoga facial por nivel
 MATERIAL_YOGAFACIAL = {
     0: ["Clase introductoria"],
     1: ["Masaje periférico"],
@@ -32,24 +31,20 @@ MATERIAL_YOGAFACIAL = {
 @yoga_bp.route("/material", methods=["GET"])
 @token_required
 def get_yoga_material(current_user):
-    """
-    Devuelve el material de Yoga Facial según la categoría del usuario.
-    Admins ven todo, usuarios normales según su categoría.
-    """
+    user_disciplina = (current_user.disciplina or "").strip().lower()
 
-    print(f"[Yoga Facial] Usuario {current_user.email} accediendo al material. Rol: {current_user.rol}, Categoria: {current_user.categoria}, Disciplina: {current_user.disciplina}")
+    print(
+        f"[Yoga Facial] Usuario {current_user.email} accediendo al material. "
+        f"Rol: {current_user.rol}, Categoria: {current_user.categoria}, Disciplina: {user_disciplina}"
+    )
 
-    # Validar que el usuario pertenece a la disciplina yoga_facial
-    if current_user.disciplina != "yoga_facial":
+    if user_disciplina != "yoga_facial":
         return jsonify({"error": "No tienes acceso a Yoga Facial"}), 403
 
-    # Determinar nivel de material
-    if current_user.rol == "admin":
-        nivel = max(MATERIAL_YOGAFACIAL.keys())
-    else:
-        nivel = current_user.categoria or 0
+    # Admin ve todo, usuario normal según su categoría
+    nivel = max(MATERIAL_YOGAFACIAL.keys()
+                ) if current_user.rol == "admin" else current_user.categoria or 0
 
-    # Construir lista de material accesible
     material = []
     for i in range(nivel + 1):
         material.extend(MATERIAL_YOGAFACIAL.get(i, []))
