@@ -115,12 +115,18 @@ def create_user(current_user):
     name = data.get('name')
     email = data.get('email')
     categoria = data.get('categoria')
-    disciplina = data.get('disciplina', '').lower().replace(" ", "_")
+    disciplina = data.get('disciplina', '').lower().replace(
+        " ", "_") if data.get('disciplina') else None
     password = data.get('password')
-    rol = data.get('rol', 'usuario').lower()
+    rol = data.get('rol', 'user').lower()
 
-    if not all([name, email, password, categoria, disciplina, rol]):
-        return jsonify({'error': 'Faltan datos obligatorios'}), 400
+    # Validación: siempre requerimos name, email, password y rol
+    if not all([name, email, password, rol]):
+        return jsonify({'error': 'Faltan datos obligatorios: name, email, rol o password'}), 400
+
+    # Validación adicional: solo usuarios normales requieren categoría y disciplina
+    if rol != 'admin' and (categoria is None or disciplina is None or disciplina == ''):
+        return jsonify({'error': 'Faltan datos obligatorios para usuarios: categoria o disciplina'}), 400
 
     if len(password) < 6:
         return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
@@ -131,10 +137,10 @@ def create_user(current_user):
     new_user = User(
         name=name,
         email=email,
-        categoria=categoria,
-        disciplina=disciplina,
         rol=rol,
-        password=generate_password_hash(password)
+        password=generate_password_hash(password),
+        categoria=categoria if rol != 'admin' else None,
+        disciplina=disciplina if rol != 'admin' else None
     )
     db.session.add(new_user)
     db.session.commit()
@@ -162,9 +168,11 @@ def update_user(current_user, email):
     if "name" in data:
         user.name = data["name"]
     if "categoria" in data:
-        user.categoria = data["categoria"]
+        user.categoria = data["categoria"] if (
+            data.get("rol", user.rol) != 'admin') else None
     if "disciplina" in data:
-        user.disciplina = data["disciplina"].lower().replace(" ", "_")
+        user.disciplina = data["disciplina"].lower().replace(
+            " ", "_") if (data.get("rol", user.rol) != 'admin') else None
     if "rol" in data:
         user.rol = data["rol"].lower()
 
