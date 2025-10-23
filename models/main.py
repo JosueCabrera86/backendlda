@@ -10,6 +10,7 @@ import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 from yoga_facial.routes import yoga_bp
+from casino.routes import casino_bp
 
 load_dotenv()
 app = Flask(__name__)
@@ -22,6 +23,7 @@ migrate = Migrate(app, db)
 CORS(app)
 
 app.register_blueprint(yoga_bp, url_prefix="/api/yoga-facial")
+app.register_blueprint(casino_bp, url_prefix="/api/casino")
 # ------------------ TOKEN & AUTH ------------------ #
 
 
