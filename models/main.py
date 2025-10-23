@@ -20,7 +20,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, resources={
+     r"/*": {"origins": ["https://losdealla.com", "http://localhost:5173"]}}, supports_credentials=True)
 
 app.register_blueprint(yoga_bp, url_prefix="/api/yoga-facial")
 app.register_blueprint(casino_bp, url_prefix="/api/casino")
