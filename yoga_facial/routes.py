@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 from utils.auth import token_required
 
+
 yoga_bp = Blueprint("yoga_bp", __name__)
 
 MATERIAL_YOGAFACIAL = {
