@@ -22,7 +22,7 @@ db.init_app(app)
 migrate = Migrate(app, db)
 CORS(
     app,
-    resources={r"/*": {"origins": ["http://localhost:5173",
+    resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:50779",
                                    "https://losdealla.com", "https://www.losdealla.com"]}},
     supports_credentials=True
 )
