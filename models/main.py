@@ -28,7 +28,8 @@ else:
             "origins": [
                 "https://losdealla.com",
                 "https://www.losdealla.com",
-                "http://localhost:5173"
+                "http://localhost:5173",
+                "https://localhost:5173"
             ]
         }
     }, supports_credentials=True)
