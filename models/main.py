@@ -25,7 +25,8 @@ if os.environ.get("FLASK_ENV") == "development":
 else:
     CORS(app, resources={r"/*": {"origins": [
         "https://losdealla.com",
-        "https://www.losdealla.com"
+        "https://www.losdealla.com",
+        "http://localhost:5173/"
     ]}}, supports_credentials=True)
 
 
