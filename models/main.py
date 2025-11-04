@@ -23,12 +23,15 @@ migrate = Migrate(app, db)
 if os.environ.get("FLASK_ENV") == "development":
     CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 else:
-    CORS(app, resources={r"/*": {"origins": [
-        "https://losdealla.com",
-        "https://www.losdealla.com",
-        "http://localhost:5173/"
-    ]}}, supports_credentials=True)
-
+    CORS(app, resources={
+        r"/*": {
+            "origins": [
+                "https://losdealla.com",
+                "https://www.losdealla.com",
+                "http://localhost:5173"
+            ]
+        }
+    }, supports_credentials=True)
 
 app.register_blueprint(yoga_bp, url_prefix="/api/yoga-facial")
 app.register_blueprint(casino_bp, url_prefix="/api/casino")
