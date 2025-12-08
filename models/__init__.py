@@ -1,4 +1,8 @@
-from .models import db, User, Post, Section
+from flask_sqlalchemy import SQLAlchemy
 
+db = SQLAlchemy()
 
-__all__ = ['db', 'User', 'Post', 'Section']
+# Import models AFTER creating db (to avoid circular imports)
+from .models import User, Post, Section  
+
+__all__ = ["db", "User", "Post", "Section"]
