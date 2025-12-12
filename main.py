@@ -19,6 +19,7 @@ CORS(
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
+
 # =============================
 #   DECORADOR DE TOKEN
 # =============================
@@ -33,7 +34,6 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
-            # validar usuario en supabase
             resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -69,9 +69,9 @@ def create_user(current_user):
     email = data.get("email")
     password = data.get("password")
     rol = data.get("rol", "user")
-    name = data.get("name") or ""           # ← Asegurar valor por defecto
-    categoria = data.get("categoria")
-    disciplina = data.get("disciplina")
+    name = data.get("name") or None
+    categoria = data.get("categoria") or None
+    disciplina = data.get("disciplina") or None
 
     if not email or not password:
         return jsonify({"error": "Faltan datos obligatorios"}), 400
@@ -83,7 +83,7 @@ def create_user(current_user):
         "disciplina": disciplina
     }
 
-    # Crear en auth
+    # Crear en Auth
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/admin/users",
         headers={
@@ -99,10 +99,7 @@ def create_user(current_user):
     )
 
     if resp.status_code not in (200, 201):
-        try:
-            return jsonify({"error": resp.json()}), 400
-        except:
-            return jsonify({"error": "Error al crear usuario en Auth"}), 400
+        return jsonify({"error": resp.json()}), 400
 
     auth_user = resp.json()
     auth_id = auth_user.get("id")
@@ -130,9 +127,7 @@ def create_user(current_user):
     )
 
     if insert_resp.status_code not in (200, 201):
-        return jsonify({
-            "error": insert_resp.json().get("message", "Error en tabla pública")
-        }), 400
+        return jsonify({"error": insert_resp.json()}), 400
 
     return jsonify({
         "message": "Usuario creado",
