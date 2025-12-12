@@ -29,25 +29,38 @@ def token_required(required_rol=None):
         def decorated(*args, **kwargs):
             auth_header = request.headers.get("Authorization", "")
             if not auth_header.startswith("Bearer "):
-                return jsonify({"message": "Formato de token inválido"}), 403
+                return jsonify({"message": "Token no enviado"}), 403
+
             token = auth_header.split(" ")[1]
-            try:
-                data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
-                if required_rol and data.get("rol") != required_rol:
-                    return jsonify({"message": "Permiso denegado"}), 403
-                kwargs["current_user"] = data
-            except jwt.ExpiredSignatureError:
-                return jsonify({"message": "Token expirado"}), 401
-            except jwt.InvalidTokenError:
+
+            # VALIDAR token contra Supabase
+            resp = requests.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "apikey": SUPABASE_SERVICE_KEY,
+                    "Authorization": f"Bearer {token}"
+                }
+            )
+
+            if resp.status_code != 200:
                 return jsonify({"message": "Token inválido"}), 401
+
+            user_data = resp.json()
+
+            # Leer rol desde user_metadata
+            rol = user_data.get("user_metadata", {}).get("rol")
+
+            if required_rol and rol != required_rol:
+                return jsonify({"message": "Permiso denegado"}), 403
+
+            kwargs["current_user"] = user_data
             return f(*args, **kwargs)
+
         return decorated
     return decorator
 
 
-# ---------------------------
-# CREAR USUARIO
-# ---------------------------
+
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
@@ -59,7 +72,6 @@ def create_user(current_user):
     if not all([email, password, rol]):
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
-    # Crear usuario en Supabase
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/admin/users",
         headers={
@@ -70,7 +82,7 @@ def create_user(current_user):
         json={
             "email": email,
             "password": password,
-            "role": rol  # solo info básica
+            "role": rol  
         }
     )
 
@@ -80,9 +92,7 @@ def create_user(current_user):
     return jsonify({"message": "Usuario creado en Supabase", "user": {"email": email, "rol": rol}}), 201
 
 
-# ---------------------------
-# CAMBIAR CONTRASEÑA
-# ---------------------------
+
 @app.route("/users/password", methods=["PATCH"])
 @token_required()
 def change_password(current_user):
