@@ -20,9 +20,6 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 
-# ---------------------------
-# TOKEN DECORATOR
-# ---------------------------
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -33,7 +30,7 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
-            # VALIDAR token contra Supabase
+            
             resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -47,7 +44,7 @@ def token_required(required_rol=None):
 
             user_data = resp.json()
 
-            # Leer rol desde user_metadata
+            
             rol = user_data.get("user_metadata", {}).get("rol")
 
             if required_rol and rol != required_rol:
@@ -69,7 +66,7 @@ def create_user(current_user):
     password = data.get("password")
     rol = data.get("rol", "user")
 
-    if not all([email, password, rol]):
+    if not all([email, password]):
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
     resp = requests.post(
@@ -82,36 +79,33 @@ def create_user(current_user):
         json={
             "email": email,
             "password": password,
-            "role": rol  
+            "user_metadata": {"rol": rol}  
         }
     )
 
     if resp.status_code not in (200, 201):
         return jsonify({"error": resp.json()}), 400
 
-    return jsonify({"message": "Usuario creado en Supabase", "user": {"email": email, "rol": rol}}), 201
-
-
+    return jsonify({"message": "Usuario creado", "user": {"email": email, "rol": rol}}), 201
 
 @app.route("/users/password", methods=["PATCH"])
 @token_required()
 def change_password(current_user):
     data = request.get_json()
-    email = data.get("email")
+    user_id = data.get("id")  
     new_password = data.get("password")
 
-    if not email or not new_password:
+    if not user_id or not new_password:
         return jsonify({"error": "Faltan datos"}), 400
 
     resp = requests.put(
-        f"{SUPABASE_URL}/auth/v1/admin/users",
+        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
             "apikey": SUPABASE_SERVICE_KEY,
             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
             "Content-Type": "application/json"
         },
         json={
-            "email": email,
             "password": new_password
         }
     )
