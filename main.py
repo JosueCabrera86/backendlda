@@ -19,12 +19,6 @@ CORS(
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
-if not SUPABASE_URL:
-    print(" ERROR: SUPABASE_URL no está definida en Render")
-if not SUPABASE_SERVICE_KEY:
-    print(" ERROR: SUPABASE_SERVICE_KEY no está definida en Render")
-
-
 # =============================
 #   DECORADOR DE TOKEN
 # =============================
@@ -75,14 +69,13 @@ def create_user(current_user):
     email = data.get("email")
     password = data.get("password")
     rol = data.get("rol", "user")
-    name = data.get("name")
-    categoria = data.get("categoria")      # entero o null
-    disciplina = data.get("disciplina")    # string o null
+    name = data.get("name") or ""           # ← Asegurar valor por defecto
+    categoria = data.get("categoria")
+    disciplina = data.get("disciplina")
 
     if not email or not password:
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
-    # Todo va dentro de user_metadata
     metadata = {
         "rol": rol,
         "name": name,
@@ -90,6 +83,7 @@ def create_user(current_user):
         "disciplina": disciplina
     }
 
+    # Crear en auth
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/admin/users",
         headers={
@@ -105,16 +99,44 @@ def create_user(current_user):
     )
 
     if resp.status_code not in (200, 201):
-        return jsonify({"error": resp.json()}), 400
+        try:
+            return jsonify({"error": resp.json()}), 400
+        except:
+            return jsonify({"error": "Error al crear usuario en Auth"}), 400
 
-    return jsonify({
-        "message": "Usuario creado",
-        "user": {
+    auth_user = resp.json()
+    auth_id = auth_user.get("id")
+
+    if not auth_id:
+        return jsonify({"error": "Supabase no devolvió un id"}), 400
+
+    # Insert en tabla pública users
+    insert_resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/users",
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        },
+        json={
+            "id": auth_id,
             "email": email,
+            "name": name,
             "rol": rol,
             "categoria": categoria,
             "disciplina": disciplina
-        }
+        },
+    )
+
+    if insert_resp.status_code not in (200, 201):
+        return jsonify({
+            "error": insert_resp.json().get("message", "Error en tabla pública")
+        }), 400
+
+    return jsonify({
+        "message": "Usuario creado",
+        "user": insert_resp.json()
     }), 201
 
 
