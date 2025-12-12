@@ -20,9 +20,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 
-# =============================
-#   DECORADOR DE TOKEN
-# =============================
+# ===========================================================
+# TOKEN REQUIRED
+# ===========================================================
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -58,9 +58,9 @@ def token_required(required_rol=None):
     return decorator
 
 
-# =============================
-#   CREAR USUARIO
-# =============================
+# ===========================================================
+# CREAR USUARIO
+# ===========================================================
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
@@ -69,9 +69,9 @@ def create_user(current_user):
     email = data.get("email")
     password = data.get("password")
     rol = data.get("rol", "user")
-    name = data.get("name") or None
-    categoria = data.get("categoria") or None
-    disciplina = data.get("disciplina") or None
+    name = data.get("name")
+    categoria = data.get("categoria")
+    disciplina = data.get("disciplina")
 
     if not email or not password:
         return jsonify({"error": "Faltan datos obligatorios"}), 400
@@ -99,7 +99,7 @@ def create_user(current_user):
     )
 
     if resp.status_code not in (200, 201):
-        return jsonify({"error": resp.json()}), 400
+        return jsonify({"error": resp.json()}), resp.status_code
 
     auth_user = resp.json()
     auth_id = auth_user.get("id")
@@ -107,7 +107,7 @@ def create_user(current_user):
     if not auth_id:
         return jsonify({"error": "Supabase no devolvió un id"}), 400
 
-    # Insert en tabla pública users
+    # Insertar en tabla pública
     insert_resp = requests.post(
         f"{SUPABASE_URL}/rest/v1/users",
         headers={
@@ -127,7 +127,7 @@ def create_user(current_user):
     )
 
     if insert_resp.status_code not in (200, 201):
-        return jsonify({"error": insert_resp.json()}), 400
+        return jsonify({"error": insert_resp.json()}), insert_resp.status_code
 
     return jsonify({
         "message": "Usuario creado",
@@ -135,11 +135,11 @@ def create_user(current_user):
     }), 201
 
 
-# =============================
-#   CAMBIAR CONTRASEÑA
-# =============================
+# ===========================================================
+# CAMBIAR CONTRASEÑA
+# ===========================================================
 @app.route("/users/password", methods=["PATCH"])
-@token_required()
+@token_required()  # user o admin
 def change_password(current_user):
     data = request.get_json()
     user_id = data.get("id")
@@ -159,19 +159,30 @@ def change_password(current_user):
     )
 
     if resp.status_code not in (200, 201):
-        return jsonify({"error": resp.json()}), 400
+        return jsonify({"error": resp.json()}), resp.status_code
 
     return jsonify({"message": "Contraseña actualizada"}), 200
 
 
-# =============================
-#   ELIMINAR USUARIO
-# =============================
+# ===========================================================
+# ELIMINAR USUARIO COMPLETO (AUTH + TABLA PUBLICA)
+# ===========================================================
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
 
-    resp = requests.delete(
+    # 1) Eliminar en tabla pública
+    delete_public = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Prefer": "return=representation",
+        }
+    )
+
+    # 2) Eliminar en Auth
+    delete_auth = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
             "apikey": SUPABASE_SERVICE_KEY,
@@ -179,10 +190,10 @@ def delete_user(current_user, user_id):
         }
     )
 
-    if resp.status_code not in (200, 204):
-        return jsonify({"error": resp.json()}), 400
+    if delete_auth.status_code not in (200, 204):
+        return jsonify({"error": delete_auth.json()}), delete_auth.status_code
 
-    return jsonify({"message": "Usuario eliminado"}), 200
+    return jsonify({"message": "Usuario eliminado completamente"}), 200
 
 
 if __name__ == "__main__":
