@@ -16,7 +16,6 @@ CORS(
     supports_credentials=True
 )
 
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
@@ -26,7 +25,9 @@ if not SUPABASE_SERVICE_KEY:
     print(" ERROR: SUPABASE_SERVICE_KEY no está definida en Render")
 
 
-
+# =============================
+#   DECORADOR DE TOKEN
+# =============================
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -38,6 +39,7 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
+            # validar usuario en supabase
             resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -50,8 +52,6 @@ def token_required(required_rol=None):
                 return jsonify({"message": "Token inválido"}), 401
 
             user_data = resp.json()
-
-           
             rol = user_data.get("user_metadata", {}).get("rol")
 
             if required_rol and rol != required_rol:
@@ -64,18 +64,32 @@ def token_required(required_rol=None):
     return decorator
 
 
+# =============================
+#   CREAR USUARIO
+# =============================
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
     data = request.get_json()
+
     email = data.get("email")
     password = data.get("password")
     rol = data.get("rol", "user")
+    name = data.get("name")
+    categoria = data.get("categoria")      # entero o null
+    disciplina = data.get("disciplina")    # string o null
 
     if not email or not password:
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
-   
+    # Todo va dentro de user_metadata
+    metadata = {
+        "rol": rol,
+        "name": name,
+        "categoria": categoria,
+        "disciplina": disciplina
+    }
+
     resp = requests.post(
         f"{SUPABASE_URL}/auth/v1/admin/users",
         headers={
@@ -86,17 +100,27 @@ def create_user(current_user):
         json={
             "email": email,
             "password": password,
-            "user_metadata": {"rol": rol},
+            "user_metadata": metadata
         },
     )
 
     if resp.status_code not in (200, 201):
         return jsonify({"error": resp.json()}), 400
 
-    return jsonify({"message": "Usuario creado", "user": {"email": email, "rol": rol}}), 201
+    return jsonify({
+        "message": "Usuario creado",
+        "user": {
+            "email": email,
+            "rol": rol,
+            "categoria": categoria,
+            "disciplina": disciplina
+        }
+    }), 201
 
 
-
+# =============================
+#   CAMBIAR CONTRASEÑA
+# =============================
 @app.route("/users/password", methods=["PATCH"])
 @token_required()
 def change_password(current_user):
@@ -122,12 +146,13 @@ def change_password(current_user):
 
     return jsonify({"message": "Contraseña actualizada"}), 200
 
+
+# =============================
+#   ELIMINAR USUARIO
+# =============================
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
-
-    if not user_id:
-        return jsonify({"error": "Falta user_id"}), 400
 
     resp = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
