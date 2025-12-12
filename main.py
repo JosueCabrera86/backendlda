@@ -122,6 +122,25 @@ def change_password(current_user):
 
     return jsonify({"message": "Contraseña actualizada"}), 200
 
+@app.route("/users/<user_id>", methods=["DELETE"])
+@token_required(required_rol="admin")
+def delete_user(current_user, user_id):
+
+    if not user_id:
+        return jsonify({"error": "Falta user_id"}), 400
+
+    resp = requests.delete(
+        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"
+        }
+    )
+
+    if resp.status_code not in (200, 204):
+        return jsonify({"error": resp.json()}), 400
+
+    return jsonify({"message": "Usuario eliminado"}), 200
 
 
 if __name__ == "__main__":
