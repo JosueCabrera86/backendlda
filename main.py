@@ -105,7 +105,7 @@ def create_user(current_user):
         if not auth_id:
             return jsonify({"error": "Supabase no devolvió un id"}), 400
 
-        # Insertar en tabla pública LUEGO DE AUTH
+        # Insertar en tabla pública
         insert_resp = requests.post(
             f"{SUPABASE_URL}/rest/v1/users",
             headers={
