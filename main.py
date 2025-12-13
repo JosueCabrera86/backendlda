@@ -72,6 +72,12 @@ def create_user(current_user):
         if not email or not password:
             return jsonify({"error": "Faltan datos obligatorios"}), 400
 
+        if categoria is not None:
+            try:
+                categoria = int(categoria)
+            except (ValueError, TypeError):
+                return jsonify({"error": "categoria debe ser un número"}), 400
+
         metadata = {
             "rol": rol,
             "name": name,
@@ -131,14 +137,14 @@ def create_user(current_user):
         }), 201
 
     except Exception as e:
-        print("ERROR EN /users:", e)
         import traceback
         traceback.print_exc()
-        return jsonify({"error": "internal", "details": str(e)}), 500
+        return jsonify({
+            "error": "internal",
+            "details": str(e)
+        }), 500
 
-# ===========================================================
-# CAMBIAR CONTRASEÑA
-# ===========================================================
+
 @app.route("/users/password", methods=["PATCH"])
 @token_required()  # user o admin
 def change_password(current_user):
