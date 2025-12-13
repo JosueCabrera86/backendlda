@@ -18,6 +18,7 @@ CORS(
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 
 def token_required(required_rol=None):
@@ -33,7 +34,7 @@ def token_required(required_rol=None):
             resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
-                    "apikey": os.getenv("SUPABASE_ANON_KEY"),
+                    "apikey": SUPABASE_ANON_KEY,
                     "Authorization": f"Bearer {token}",
                 },
             )
@@ -107,7 +108,17 @@ def create_user(current_user):
         if not auth_id:
             return jsonify({"error": "Supabase no devolvió un id"}), 400
 
-        # Insertar en tabla pública
+        # Insertar en tabla pública (solo enviar categoria si es int)
+        payload = {
+            "id": auth_id,
+            "email": email,
+            "name": name,
+            "rol": rol,
+            "disciplina": disciplina
+        }
+        if categoria is not None:
+            payload["categoria"] = categoria
+
         insert_resp = requests.post(
             f"{SUPABASE_URL}/rest/v1/users",
             headers={
@@ -116,14 +127,7 @@ def create_user(current_user):
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
-            json={
-                "id": auth_id,
-                "email": email,
-                "name": name,
-                "rol": rol,
-                "categoria": categoria,  # ✅ siempre int o null
-                "disciplina": disciplina
-            },
+            json=payload,
         )
 
         if insert_resp.status_code not in (200, 201):
@@ -172,7 +176,6 @@ def change_password(current_user):
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
-
     # Eliminar en tabla pública
     requests.delete(
         f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
