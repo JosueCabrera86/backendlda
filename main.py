@@ -20,9 +20,6 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 
-# ===========================================================
-# TOKEN REQUIRED
-# ===========================================================
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -37,7 +34,7 @@ def token_required(required_rol=None):
             resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
-                    "apikey": SUPABASE_SERVICE_KEY,
+                    "apikey": os.getenv("SUPABASE_ANON_KEY"),
                     "Authorization": f"Bearer {token}",
                 },
             )
@@ -56,6 +53,7 @@ def token_required(required_rol=None):
 
         return decorated
     return decorator
+
 
 
 @app.route("/users", methods=["POST"])
