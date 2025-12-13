@@ -49,7 +49,6 @@ def token_required(required_rol=None):
 
             kwargs["current_user"] = user_data
             return f(*args, **kwargs)
-
         return decorated
     return decorator
 
@@ -59,7 +58,6 @@ def token_required(required_rol=None):
 def create_user(current_user):
     try:
         data = request.get_json()
-
         email = data.get("email")
         password = data.get("password")
         rol = data.get("rol", "user")
@@ -70,8 +68,10 @@ def create_user(current_user):
         if not email or not password:
             return jsonify({"error": "Faltan datos obligatorios"}), 400
 
-        # Asegurar que categoria sea integer o None
-        if categoria is not None:
+        # Forzar que categoria sea integer o None
+        if categoria in (None, ""):
+            categoria = None
+        else:
             try:
                 categoria = int(categoria)
             except (ValueError, TypeError):
@@ -121,7 +121,7 @@ def create_user(current_user):
                 "email": email,
                 "name": name,
                 "rol": rol,
-                "categoria": categoria,
+                "categoria": categoria,  # ✅ siempre int o null
                 "disciplina": disciplina
             },
         )
@@ -174,7 +174,7 @@ def change_password(current_user):
 def delete_user(current_user, user_id):
 
     # Eliminar en tabla pública
-    delete_public = requests.delete(
+    requests.delete(
         f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
         headers={
             "apikey": SUPABASE_SERVICE_KEY,
