@@ -34,7 +34,7 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
-            # 1️⃣ Validar token
+            # Validar token
             auth_resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -49,7 +49,7 @@ def token_required(required_rol=None):
             auth_user = auth_resp.json()
             auth_id = auth_user["id"]  # UUID
 
-            # 2️⃣ Obtener rol REAL desde public.users (USAR auth_id)
+            # Obtener rol real desde public.users
             db_resp = requests.get(
                 f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{auth_id}&select=rol",
                 headers={
@@ -79,6 +79,27 @@ def token_required(required_rol=None):
 
 
 # =========================
+# GET USERS (ADMIN)
+# =========================
+@app.route("/admin/users", methods=["GET"])
+@token_required(required_rol="admin")
+def get_users(current_user):
+    try:
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/users?select=id,auth_id,name,email,rol,categoria,disciplina",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            },
+        )
+        if not resp.ok:
+            return jsonify({"error": resp.json()}), resp.status_code
+        return jsonify(resp.json()), 200
+    except Exception as e:
+        return jsonify({"error": "internal", "details": str(e)}), 500
+
+
+# =========================
 # CREATE USER
 # =========================
 @app.route("/users", methods=["POST"])
@@ -86,7 +107,6 @@ def token_required(required_rol=None):
 def create_user(current_user):
     try:
         data = request.get_json()
-
         email = data.get("email")
         password = data.get("password")
         rol = data.get("rol", "user")
@@ -125,7 +145,6 @@ def create_user(current_user):
             return jsonify({"error": resp.json()}), resp.status_code
 
         return jsonify({"message": "Usuario creado correctamente"}), 201
-
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -139,7 +158,7 @@ def create_user(current_user):
 @token_required()
 def change_password(current_user):
     data = request.get_json()
-    user_id = data.get("id")  # UUID auth
+    user_id = data.get("id")
     new_password = data.get("password")
 
     if not user_id or not new_password:
@@ -162,13 +181,72 @@ def change_password(current_user):
 
 
 # =========================
+# EDIT USER (PATCH)
+# =========================
+@app.route("/users", methods=["PATCH"])
+@token_required(required_rol="admin")
+def edit_user(current_user):
+    data = request.get_json()
+    user_id = data.get("id")
+    updates = {}
+
+    for field in ["name", "rol", "categoria", "disciplina"]:
+        if field in data:
+            updates[field] = data[field]
+
+    if not user_id or not updates:
+        return jsonify({"error": "Faltan datos"}), 400
+
+    resp = requests.patch(
+        f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{user_id}",
+        headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=updates,
+    )
+
+    if not resp.ok:
+        return jsonify({"error": resp.json()}), resp.status_code
+
+    return jsonify({"message": "Usuario actualizado"}), 200
+
+
+# =========================
+# EDIT MULTIPLE USERS
+# =========================
+@app.route("/users/multiple", methods=["PATCH"])
+@token_required(required_rol="admin")
+def edit_multiple_users(current_user):
+    data = request.get_json()
+    ids = data.get("ids", [])
+    categoria = data.get("categoria")
+
+    if not ids or categoria is None:
+        return jsonify({"error": "Faltan datos"}), 400
+
+    for uid in ids:
+        requests.patch(
+            f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{uid}",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={"categoria": int(categoria)},
+        )
+
+    return jsonify({"message": "Usuarios actualizados"}), 200
+
+
+# =========================
 # DELETE USER
 # =========================
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
-    # user_id = UUID auth
-
+    # Eliminar de la tabla users
     requests.delete(
         f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{user_id}",
         headers={
@@ -177,6 +255,7 @@ def delete_user(current_user, user_id):
         },
     )
 
+    # Eliminar del auth
     delete_auth = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
@@ -189,3 +268,6 @@ def delete_user(current_user, user_id):
         return jsonify({"error": delete_auth.json()}), delete_auth.status_code
 
     return jsonify({"message": "Usuario eliminado completamente"}), 200
+
+
+
