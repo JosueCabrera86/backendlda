@@ -21,6 +21,9 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 
+# =========================
+# AUTH MIDDLEWARE
+# =========================
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -31,7 +34,8 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
-            resp = requests.get(
+            # 1️⃣ Validar token con Supabase
+            auth_resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
                     "apikey": SUPABASE_ANON_KEY,
@@ -39,26 +43,50 @@ def token_required(required_rol=None):
                 },
             )
 
-            if resp.status_code != 200:
+            if auth_resp.status_code != 200:
                 return jsonify({"message": "Token inválido"}), 401
 
-            user_data = resp.json()
-            rol = user_data.get("user_metadata", {}).get("rol")
+            auth_user = auth_resp.json()
+            user_id = auth_user["id"]
+
+            # 2️⃣ Obtener rol desde public.users
+            db_resp = requests.get(
+                f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}&select=rol",
+                headers={
+                    "apikey": SUPABASE_SERVICE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                },
+            )
+
+            if db_resp.status_code != 200 or not db_resp.json():
+                return jsonify({"message": "Usuario no encontrado"}), 403
+
+            rol = db_resp.json()[0]["rol"]
 
             if required_rol and rol != required_rol:
                 return jsonify({"message": "Permiso denegado"}), 403
 
-            kwargs["current_user"] = user_data
+            kwargs["current_user"] = {
+                "id": user_id,
+                "rol": rol,
+                "email": auth_user.get("email")
+            }
+
             return f(*args, **kwargs)
+
         return decorated
     return decorator
 
 
+# =========================
+# CREATE USER
+# =========================
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
     try:
         data = request.get_json()
+
         email = data.get("email")
         password = data.get("password")
         rol = data.get("rol", "user")
@@ -69,23 +97,11 @@ def create_user(current_user):
         if not email or not password:
             return jsonify({"error": "Faltan datos obligatorios"}), 400
 
-        # Forzar que categoria sea integer o None
         if categoria in (None, ""):
             categoria = None
         else:
-            try:
-                categoria = int(categoria)
-            except (ValueError, TypeError):
-                return jsonify({"error": "categoria debe ser un número"}), 400
+            categoria = int(categoria)
 
-        metadata = {
-            "rol": rol,
-            "name": name,
-            "categoria": categoria,
-            "disciplina": disciplina
-        }
-
-        # Crear usuario en Auth
         resp = requests.post(
             f"{SUPABASE_URL}/auth/v1/admin/users",
             headers={
@@ -96,59 +112,31 @@ def create_user(current_user):
             json={
                 "email": email,
                 "password": password,
-                "user_metadata": metadata
+                "user_metadata": {
+                    "rol": rol,
+                    "name": name,
+                    "categoria": categoria,
+                    "disciplina": disciplina
+                }
             },
         )
 
         if resp.status_code not in (200, 201):
             return jsonify({"error": resp.json()}), resp.status_code
 
-        auth_user = resp.json()
-        auth_id = auth_user.get("id")
-        if not auth_id:
-            return jsonify({"error": "Supabase no devolvió un id"}), 400
-
-        # Insertar en tabla pública (solo enviar categoria si es int)
-        payload = {
-            "id": auth_id,
-            "email": email,
-            "name": name,
-            "rol": rol,
-            "disciplina": disciplina
-        }
-        if categoria is not None:
-            payload["categoria"] = categoria
-
-        insert_resp = requests.post(
-            f"{SUPABASE_URL}/rest/v1/users",
-            headers={
-                "apikey": SUPABASE_SERVICE_KEY,
-                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            },
-            json=payload,
-        )
-
-        if insert_resp.status_code not in (200, 201):
-            return jsonify({"error": insert_resp.json()}), insert_resp.status_code
-
-        return jsonify({
-            "message": "Usuario creado",
-            "user": insert_resp.json()
-        }), 201
+        return jsonify({"message": "Usuario creado correctamente"}), 201
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({
-            "error": "internal",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "internal", "details": str(e)}), 500
 
 
+# =========================
+# CHANGE PASSWORD
+# =========================
 @app.route("/users/password", methods=["PATCH"])
-@token_required()  # user o admin
+@token_required()
 def change_password(current_user):
     data = request.get_json()
     user_id = data.get("id")
@@ -173,20 +161,21 @@ def change_password(current_user):
     return jsonify({"message": "Contraseña actualizada"}), 200
 
 
+# =========================
+# DELETE USER
+# =========================
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
-    # Eliminar en tabla pública
+
     requests.delete(
         f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
         headers={
             "apikey": SUPABASE_SERVICE_KEY,
             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Prefer": "return=representation",
         }
     )
 
-    # Eliminar en Auth
     delete_auth = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
@@ -199,7 +188,3 @@ def delete_user(current_user, user_id):
         return jsonify({"error": delete_auth.json()}), delete_auth.status_code
 
     return jsonify({"message": "Usuario eliminado completamente"}), 200
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
