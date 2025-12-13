@@ -111,10 +111,6 @@ def get_users(current_user):
     except Exception as e:
         return jsonify({"error": "internal", "details": str(e)}), 500
 
-
-# =========================
-# CREATE USER
-# =========================
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
@@ -122,20 +118,26 @@ def create_user(current_user):
         data = request.get_json()
         email = data.get("email")
         password = data.get("password")
-        rol = data.get("rol", "user")
+        rol = data.get("rol")
         name = data.get("name")
         categoria = data.get("categoria")
         disciplina = data.get("disciplina")
 
-        if not email or not password:
-            return jsonify({"error": "Faltan datos obligatorios"}), 400
+        # Validaciones obligatorias
+        missing_fields = []
+        for field_name, value in [("email", email), ("password", password),
+                                  ("rol", rol), ("name", name),
+                                  ("categoria", categoria), ("disciplina", disciplina)]:
+            if value is None or value == "":
+                missing_fields.append(field_name)
+        if missing_fields:
+            return jsonify({"error": f"Faltan campos obligatorios: {', '.join(missing_fields)}"}), 400
 
-        if categoria in (None, ""):
-            categoria = None
-        else:
-            categoria = int(categoria)
+        # Forzar categoria a int
+        categoria = int(categoria)
 
-        resp = requests.post(
+        # 1️⃣ Crear usuario en auth.users
+        auth_resp = requests.post(
             f"{SUPABASE_URL}/auth/v1/admin/users",
             headers={
                 "apikey": SUPABASE_SERVICE_KEY,
@@ -154,48 +156,41 @@ def create_user(current_user):
             },
         )
 
-        if resp.status_code not in (200, 201):
-            return jsonify({"error": resp.json()}), resp.status_code
+        if auth_resp.status_code not in (200, 201):
+            return jsonify({"error": auth_resp.json()}), auth_resp.status_code
 
-        return jsonify({"message": "Usuario creado correctamente"}), 201
+        auth_user_id = auth_resp.json()["id"]
+
+        # 2️⃣ Insertar en public.users
+        user_insert_resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/users",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "auth_id": auth_user_id,
+                "email": email,
+                "name": name,
+                "rol": rol,
+                "categoria": categoria,
+                "disciplina": disciplina,
+            },
+            params={"on_conflict": "auth_id"}  # Evita error si auth_id ya existe
+        )
+
+        if user_insert_resp.status_code not in (200, 201):
+            return jsonify({"error": user_insert_resp.json()}), user_insert_resp.status_code
+
+        return jsonify({"message": "Usuario creado correctamente", "auth_id": auth_user_id}), 201
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": "internal", "details": str(e)}), 500
 
 
-# =========================
-# CHANGE PASSWORD
-# =========================
-@app.route("/users/password", methods=["PATCH"])
-@token_required()
-def change_password(current_user):
-    data = request.get_json()
-    user_id = data.get("id")
-    new_password = data.get("password")
-
-    if not user_id or not new_password:
-        return jsonify({"error": "Faltan datos"}), 400
-
-    resp = requests.put(
-        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
-        headers={
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={"password": new_password},
-    )
-
-    if resp.status_code not in (200, 201):
-        return jsonify({"error": resp.json()}), resp.status_code
-
-    return jsonify({"message": "Contraseña actualizada"}), 200
-
-
-# =========================
-# EDIT USER (PATCH)
-# =========================
 @app.route("/users", methods=["PATCH"])
 @token_required(required_rol="admin")
 def edit_user(current_user):
@@ -226,9 +221,7 @@ def edit_user(current_user):
     return jsonify({"message": "Usuario actualizado"}), 200
 
 
-# =========================
-# EDIT MULTIPLE USERS
-# =========================
+
 @app.route("/users/multiple", methods=["PATCH"])
 @token_required(required_rol="admin")
 def edit_multiple_users(current_user):
@@ -253,13 +246,11 @@ def edit_multiple_users(current_user):
     return jsonify({"message": "Usuarios actualizados"}), 200
 
 
-# =========================
-# DELETE USER
-# =========================
+
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
-    # Eliminar de la tabla users
+
     requests.delete(
         f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{user_id}",
         headers={
@@ -268,7 +259,7 @@ def delete_user(current_user, user_id):
         },
     )
 
-    # Eliminar del auth
+    
     delete_auth = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
