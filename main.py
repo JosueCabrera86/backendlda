@@ -24,7 +24,6 @@ def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-
             auth_header = request.headers.get("Authorization", "")
             if not auth_header.startswith("Bearer "):
                 return jsonify({"message": "Token no enviado"}), 403
@@ -55,7 +54,6 @@ def token_required(required_rol=None):
     return decorator
 
 
-
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
@@ -72,6 +70,7 @@ def create_user(current_user):
         if not email or not password:
             return jsonify({"error": "Faltan datos obligatorios"}), 400
 
+        # Asegurar que categoria sea integer o None
         if categoria is not None:
             try:
                 categoria = int(categoria)
@@ -105,7 +104,6 @@ def create_user(current_user):
 
         auth_user = resp.json()
         auth_id = auth_user.get("id")
-
         if not auth_id:
             return jsonify({"error": "Supabase no devolvió un id"}), 400
 
@@ -171,14 +169,11 @@ def change_password(current_user):
     return jsonify({"message": "Contraseña actualizada"}), 200
 
 
-# ===========================================================
-# ELIMINAR USUARIO COMPLETO (AUTH + TABLA PUBLICA)
-# ===========================================================
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
 
-    # 1) Eliminar en tabla pública
+    # Eliminar en tabla pública
     delete_public = requests.delete(
         f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
         headers={
@@ -188,7 +183,7 @@ def delete_user(current_user, user_id):
         }
     )
 
-    # 2) Eliminar en Auth
+    # Eliminar en Auth
     delete_auth = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
