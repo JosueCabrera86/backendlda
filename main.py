@@ -29,16 +29,12 @@ def token_required(required_rol=None):
         @wraps(f)
         def decorated(*args, **kwargs):
             auth_header = request.headers.get("Authorization", "")
-            print("=== DEBUG TOKEN HEADER ===")
-            print("auth_header:", auth_header)
-
             if not auth_header.startswith("Bearer "):
-                print("Token no enviado")
                 return jsonify({"message": "Token no enviado"}), 403
 
             token = auth_header.split(" ")[1]
 
-            # Validar token
+            # 1️⃣ Validar token
             auth_resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -48,15 +44,17 @@ def token_required(required_rol=None):
             )
 
             if auth_resp.status_code != 200:
-                print("Token inválido")
                 return jsonify({"message": "Token inválido"}), 401
 
             auth_user = auth_resp.json()
-            auth_id = auth_user.get("id")
+            auth_id = auth_user["id"]  # UUID
+
+            print("=== DEBUG TOKEN HEADER ===")
+            print("auth_header:", auth_header)
             print("AUTH_ID:", auth_id)
             print("USER EMAIL:", auth_user.get("email"))
 
-            # Obtener rol real desde public.users
+            # 2️⃣ Obtener rol REAL desde public.users (USAR auth_id)
             db_resp = requests.get(
                 f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{auth_id}&select=rol",
                 headers={
@@ -65,15 +63,19 @@ def token_required(required_rol=None):
                 },
             )
 
+            print("=== DEBUG DB RESPONSE ===")
+            print("Status code:", db_resp.status_code)
+            try:
+                print("Response JSON:", db_resp.json())
+            except Exception as e:
+                print("No JSON response:", db_resp.text)
+
             if not db_resp.ok or not db_resp.json():
-                print("Usuario no registrado en la base")
                 return jsonify({"message": "Usuario no registrado en la base"}), 403
 
             rol = db_resp.json()[0]["rol"]
-            print("ROL en DB:", rol)
 
             if required_rol and rol != required_rol:
-                print(f"Permiso denegado: se requiere {required_rol}, pero es {rol}")
                 return jsonify({"message": "Permiso denegado"}), 403
 
             kwargs["current_user"] = {
@@ -86,6 +88,7 @@ def token_required(required_rol=None):
 
         return decorated
     return decorator
+
 
 
 # =========================
