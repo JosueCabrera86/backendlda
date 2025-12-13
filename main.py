@@ -34,7 +34,7 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
-            # 1️⃣ Validar token con Supabase
+            # 1️⃣ Validar token
             auth_resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -47,19 +47,19 @@ def token_required(required_rol=None):
                 return jsonify({"message": "Token inválido"}), 401
 
             auth_user = auth_resp.json()
-            user_id = auth_user["id"]
+            auth_id = auth_user["id"]  # UUID
 
-            # 2️⃣ Obtener rol desde public.users
+            # 2️⃣ Obtener rol REAL desde public.users (USAR auth_id)
             db_resp = requests.get(
-                f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}&select=rol",
+                f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{auth_id}&select=rol",
                 headers={
                     "apikey": SUPABASE_SERVICE_KEY,
                     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                 },
             )
 
-            if db_resp.status_code != 200 or not db_resp.json():
-                return jsonify({"message": "Usuario no encontrado"}), 403
+            if not db_resp.ok or not db_resp.json():
+                return jsonify({"message": "Usuario no registrado en la base"}), 403
 
             rol = db_resp.json()[0]["rol"]
 
@@ -67,9 +67,9 @@ def token_required(required_rol=None):
                 return jsonify({"message": "Permiso denegado"}), 403
 
             kwargs["current_user"] = {
-                "id": user_id,
+                "auth_id": auth_id,
                 "rol": rol,
-                "email": auth_user.get("email")
+                "email": auth_user.get("email"),
             }
 
             return f(*args, **kwargs)
@@ -116,8 +116,8 @@ def create_user(current_user):
                     "rol": rol,
                     "name": name,
                     "categoria": categoria,
-                    "disciplina": disciplina
-                }
+                    "disciplina": disciplina,
+                },
             },
         )
 
@@ -139,7 +139,7 @@ def create_user(current_user):
 @token_required()
 def change_password(current_user):
     data = request.get_json()
-    user_id = data.get("id")
+    user_id = data.get("id")  # UUID auth
     new_password = data.get("password")
 
     if not user_id or not new_password:
@@ -167,21 +167,22 @@ def change_password(current_user):
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
+    # user_id = UUID auth
 
     requests.delete(
-        f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}",
+        f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{user_id}",
         headers={
             "apikey": SUPABASE_SERVICE_KEY,
             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        }
+        },
     )
 
     delete_auth = requests.delete(
         f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
         headers={
             "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"
-        }
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        },
     )
 
     if delete_auth.status_code not in (200, 204):
