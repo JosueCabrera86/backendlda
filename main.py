@@ -91,9 +91,8 @@ def token_required(required_rol=None):
 
 
 
-# =========================
-# GET USERS (ADMIN)
-# =========================
+
+
 @app.route("/admin/users", methods=["GET"])
 @token_required(required_rol="admin")
 def get_users(current_user):
@@ -116,6 +115,9 @@ def get_users(current_user):
 def create_user(current_user):
     try:
         data = request.get_json()
+        print("=== DEBUG CREATE USER INPUT ===")
+        print(data)
+
         email = data.get("email")
         password = data.get("password")
         rol = data.get("rol")
@@ -134,7 +136,10 @@ def create_user(current_user):
             return jsonify({"error": f"Faltan campos obligatorios: {', '.join(missing_fields)}"}), 400
 
         # Forzar categoria a int
-        categoria = int(categoria)
+        try:
+            categoria = int(categoria)
+        except Exception as e:
+            return jsonify({"error": "Categoria debe ser un número válido"}), 400
 
         # 1️⃣ Crear usuario en auth.users
         auth_resp = requests.post(
@@ -155,6 +160,13 @@ def create_user(current_user):
                 },
             },
         )
+
+        print("=== DEBUG AUTH RESP ===")
+        print(auth_resp.status_code)
+        try:
+            print(auth_resp.json())
+        except Exception:
+            print(auth_resp.text)
 
         if auth_resp.status_code not in (200, 201):
             return jsonify({"error": auth_resp.json()}), auth_resp.status_code
@@ -179,6 +191,13 @@ def create_user(current_user):
             },
             params={"on_conflict": "auth_id"}  # Evita error si auth_id ya existe
         )
+
+        print("=== DEBUG USER INSERT RESP ===")
+        print(user_insert_resp.status_code)
+        try:
+            print(user_insert_resp.json())
+        except Exception:
+            print(user_insert_resp.text)
 
         if user_insert_resp.status_code not in (200, 201):
             return jsonify({"error": user_insert_resp.json()}), user_insert_resp.status_code
