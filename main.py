@@ -118,24 +118,31 @@ def create_user(current_user):
         print("=== DEBUG CREATE USER INPUT ===")
         print(data)
 
-        # Campos requeridos
-        required_fields = ["email", "password", "rol", "name", "categoria", "disciplina"]
-        missing_fields = [f for f in required_fields if not data.get(f)]
+        email = data.get("email")
+        password = data.get("password")
+        rol = data.get("rol")
+        name = data.get("name")
+        categoria = data.get("categoria")
+        disciplina = data.get("disciplina")
+
+        # Validaciones obligatorias
+        missing_fields = [
+            field_name for field_name, value in [
+                ("email", email), ("password", password),
+                ("rol", rol), ("name", name),
+                ("categoria", categoria), ("disciplina", disciplina)
+            ] if not value
+        ]
         if missing_fields:
             return jsonify({"error": f"Faltan campos obligatorios: {', '.join(missing_fields)}"}), 400
 
-        email = data["email"]
-        password = data["password"]
-        rol = data["rol"]
-        name = data["name"]
-        disciplina = data["disciplina"]
-
+        # Forzar categoria a int
         try:
-            categoria = int(data["categoria"])
-        except:
+            categoria = int(categoria)
+        except Exception:
             return jsonify({"error": "Categoria debe ser un número válido"}), 400
 
-        # 1️⃣ Crear usuario en auth
+        # 1️⃣ Crear usuario en auth.users
         auth_payload = {
             "email": email,
             "password": password,
@@ -157,43 +164,49 @@ def create_user(current_user):
                 "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                 "Content-Type": "application/json",
             },
-            json=auth_payload,
+            json=auth_payload
         )
+
+        print("=== DEBUG AUTH RESP ===")
+        print(auth_resp.status_code)
+        try:
+            print(auth_resp.json())
+        except Exception:
+            print(auth_resp.text)
 
         if auth_resp.status_code not in (200, 201):
             return jsonify({"error": auth_resp.json()}), auth_resp.status_code
 
         auth_user_id = auth_resp.json()["id"]
 
-        # 2️⃣ Insertar en public.users con seguridad
-        user_payload = {
+        # 2️⃣ Insertar en public.users
+        user_insert_payload = {
             "auth_id": auth_user_id,
             "email": email,
             "name": name,
             "rol": rol,
             "categoria": categoria,
-            "disciplina": disciplina,
+            "disciplina": disciplina
         }
 
         print("=== DEBUG USER INSERT PAYLOAD ===")
-        print(user_payload)
+        print(user_insert_payload)
 
         user_insert_resp = requests.post(
-            f"{SUPABASE_URL}/rest/v1/users",
+            f"{SUPABASE_URL}/rest/v1/users?on_conflict=auth_id",
             headers={
                 "apikey": SUPABASE_SERVICE_KEY,
                 "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                 "Content-Type": "application/json",
             },
-            json=user_payload,
-            params={"on_conflict": "auth_id", "returning": "representation"}  # garantiza que devuelva el registro
+            json=user_insert_payload
         )
 
         print("=== DEBUG USER INSERT RESP ===")
         print(user_insert_resp.status_code)
         try:
             print(user_insert_resp.json())
-        except:
+        except Exception:
             print(user_insert_resp.text)
 
         if user_insert_resp.status_code not in (200, 201):
