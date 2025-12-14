@@ -101,19 +101,34 @@ def token_required(required_rol=None):
 @token_required(required_rol="admin")
 def get_users(current_user):
     try:
-        resp = requests.get(
-            f"{SUPABASE_URL}/rest/v1/users?select=id,auth_id,name,email,rol,categoria,disciplina",
-            headers={
-                "apikey": SUPABASE_SERVICE_KEY,
-                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            },
-        )
-        if not resp.ok:
-            return jsonify({"error": resp.json()}), resp.status_code
-        return jsonify(resp.json()), 200
-    except Exception as e:
-        return jsonify({"error": "internal", "details": str(e)}), 500
+        url = f"{SUPABASE_URL}/rest/v1/users?select=id,auth_id,name,email,rol,categoria,disciplina"
 
+        headers = {
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        }
+
+        print("=== DEBUG GET USERS ===")
+        print("URL:", url)
+        print("HEADERS:", headers)
+
+        resp = requests.get(url, headers=headers)
+
+        print("Status code:", resp.status_code)
+        try:
+            print("Response JSON:", resp.json())
+        except Exception as e:
+            print("No JSON response, raw text:", resp.text)
+
+        if not resp.ok:
+            return jsonify({"error": "Error en Supabase", "details": resp.text}), resp.status_code
+
+        return jsonify(resp.json()), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "internal", "details": str(e)}), 500
 
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
