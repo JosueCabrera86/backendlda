@@ -160,12 +160,12 @@ def create_user(current_user):
         except Exception:
             return jsonify({"error": "Categoria debe ser un número válido"}), 400
 
-        # 1️⃣ Crear usuario en Auth con email confirmado
+
         auth_payload = {
-            "email": email,
-            "password": password,
-            "email_confirmed_at": datetime.utcnow().isoformat() + "Z",  # ✅ fecha UTC actual
-            "user_metadata": {
+             "email": email,
+             "password": password,
+             "email_confirm": True,
+             "user_metadata": {
                 "rol": rol,
                 "name": name,
                 "categoria": categoria,
