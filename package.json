@@ -16,5 +16,9 @@
     "url": "https://github.com/JosueCabrera86/backendlda/issues"
   },
   "homepage": "https://github.com/JosueCabrera86/backendlda#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.87.1",
+    "dotenv": "^17.2.3"
+  }
 }

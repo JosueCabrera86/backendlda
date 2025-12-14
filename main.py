@@ -4,6 +4,7 @@ from functools import wraps
 import os
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -26,9 +27,7 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 
-# =========================
-# AUTH MIDDLEWARE
-# =========================
+
 def token_required(required_rol=None):
     def decorator(f):
         @wraps(f)
@@ -39,7 +38,7 @@ def token_required(required_rol=None):
 
             token = auth_header.split(" ")[1]
 
-            # 1️⃣ Validar token
+           
             auth_resp = requests.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={
@@ -52,14 +51,14 @@ def token_required(required_rol=None):
                 return jsonify({"message": "Token inválido"}), 401
 
             auth_user = auth_resp.json()
-            auth_id = auth_user["id"]  # UUID
+            auth_id = auth_user["id"]  
 
             print("=== DEBUG TOKEN HEADER ===")
             print("auth_header:", auth_header)
             print("AUTH_ID:", auth_id)
             print("USER EMAIL:", auth_user.get("email"))
 
-            # 2️⃣ Obtener rol REAL desde public.users (USAR auth_id)
+            
             db_resp = requests.get(
                 f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{auth_id}&select=rol",
                 headers={
@@ -115,13 +114,12 @@ def get_users(current_user):
     except Exception as e:
         return jsonify({"error": "internal", "details": str(e)}), 500
 
+
 @app.route("/users", methods=["POST"])
 @token_required(required_rol="admin")
 def create_user(current_user):
     try:
         data = request.get_json()
-        print("=== DEBUG CREATE USER INPUT ===")
-        print(data)
 
         email = data.get("email")
         password = data.get("password")
@@ -147,10 +145,11 @@ def create_user(current_user):
         except Exception:
             return jsonify({"error": "Categoria debe ser un número válido"}), 400
 
-        # 1️⃣ Crear usuario en auth.users
+        # 1️⃣ Crear usuario en Auth con email confirmado
         auth_payload = {
             "email": email,
             "password": password,
+            "email_confirmed_at": datetime.utcnow().isoformat() + "Z",  # ✅ fecha UTC actual
             "user_metadata": {
                 "rol": rol,
                 "name": name,
@@ -158,9 +157,6 @@ def create_user(current_user):
                 "disciplina": disciplina,
             },
         }
-
-        print("=== DEBUG AUTH PAYLOAD ===")
-        print(auth_payload)
 
         auth_resp = requests.post(
             f"{SUPABASE_URL}/auth/v1/admin/users",
@@ -172,19 +168,15 @@ def create_user(current_user):
             json=auth_payload
         )
 
-        print("=== DEBUG AUTH RESP ===")
-        print(auth_resp.status_code)
-        try:
-            print(auth_resp.json())
-        except Exception:
-            print(auth_resp.text)
-
         if auth_resp.status_code not in (200, 201):
-            return jsonify({"error": auth_resp.json()}), auth_resp.status_code
+            try:
+                return jsonify({"error": auth_resp.json()}), auth_resp.status_code
+            except:
+                return jsonify({"error": auth_resp.text}), auth_resp.status_code
 
         auth_user_id = auth_resp.json()["id"]
 
-        # 2️⃣ Insertar en public.users
+        # 2️⃣ Insertar en tabla public.users
         user_insert_payload = {
             "auth_id": auth_user_id,
             "email": email,
@@ -193,9 +185,6 @@ def create_user(current_user):
             "categoria": categoria,
             "disciplina": disciplina
         }
-
-        print("=== DEBUG USER INSERT PAYLOAD ===")
-        print(user_insert_payload)
 
         user_insert_resp = requests.post(
             f"{SUPABASE_URL}/rest/v1/users?on_conflict=auth_id",
@@ -207,15 +196,11 @@ def create_user(current_user):
             json=user_insert_payload
         )
 
-        print("=== DEBUG USER INSERT RESP ===")
-        print(user_insert_resp.status_code)
-        try:
-            print(user_insert_resp.json())
-        except Exception:
-            print(user_insert_resp.text)
-
         if user_insert_resp.status_code not in (200, 201):
-            return jsonify({"error": user_insert_resp.json()}), user_insert_resp.status_code
+            try:
+                return jsonify({"error": user_insert_resp.json()}), user_insert_resp.status_code
+            except:
+                return jsonify({"error": user_insert_resp.text}), user_insert_resp.status_code
 
         return jsonify({"message": "Usuario creado correctamente", "auth_id": auth_user_id}), 201
 
@@ -223,7 +208,6 @@ def create_user(current_user):
         import traceback
         traceback.print_exc()
         return jsonify({"error": "internal", "details": str(e)}), 500
-
 
 @app.route("/users", methods=["PATCH"])
 @token_required(required_rol="admin")
@@ -284,28 +268,43 @@ def edit_multiple_users(current_user):
 @app.route("/users/<user_id>", methods=["DELETE"])
 @token_required(required_rol="admin")
 def delete_user(current_user, user_id):
+    try:
+        # 1️⃣ Borrar de tabla public.users
+        resp = requests.delete(
+            f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{user_id}",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            },
+        )
 
-    requests.delete(
-        f"{SUPABASE_URL}/rest/v1/users?auth_id=eq.{user_id}",
-        headers={
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        },
-    )
+        if resp.status_code not in (200, 204):
+            try:
+                return jsonify({"error": resp.json()}), resp.status_code
+            except:
+                return jsonify({"error": resp.text}), resp.status_code
 
-    
-    delete_auth = requests.delete(
-        f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
-        headers={
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        },
-    )
+        # 2️⃣ Borrar de Auth
+        delete_auth = requests.delete(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            },
+        )
 
-    if delete_auth.status_code not in (200, 204):
-        return jsonify({"error": delete_auth.json()}), delete_auth.status_code
+        if delete_auth.status_code not in (200, 204):
+            try:
+                return jsonify({"error": delete_auth.json()}), delete_auth.status_code
+            except:
+                return jsonify({"error": delete_auth.text}), delete_auth.status_code
 
-    return jsonify({"message": "Usuario eliminado completamente"}), 200
+        return jsonify({"message": "Usuario eliminado completamente"}), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "internal", "details": str(e)}), 500
 
 
 
