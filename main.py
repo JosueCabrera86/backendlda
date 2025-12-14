@@ -12,9 +12,14 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 
 CORS(
     app,
-    resources={r"/*": {"origins": ["https://losdealla.com", "http://localhost:5173"]}},
+    resources={r"/*": {"origins": [
+        "https://losdealla.com",
+        "https://www.losdealla.com",
+        "http://localhost:5173"
+    ]}},
     supports_credentials=True
 )
+
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
